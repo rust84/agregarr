@@ -6,6 +6,7 @@ interface PlexPosterMetadata {
   selected?: string | number | boolean;
   thumb?: string;
   key?: string;
+  ratingKey?: string;
 }
 
 /**
@@ -116,6 +117,45 @@ class PlexPosterManager {
         filepath,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Get the key of the most recently uploaded (upload://) poster for an item.
+   * Returns null if no uploaded poster is found.
+   */
+  public async getLatestUploadedPosterKey(
+    ratingKey: string
+  ): Promise<string | null> {
+    try {
+      const response = await this.plexApi['plexClient'].query(
+        `/library/metadata/${ratingKey}/posters`
+      );
+
+      const posters = (response?.MediaContainer?.Metadata ||
+        []) as PlexPosterMetadata[];
+
+      // Plex stores user-uploaded posters with a key starting with "upload://"
+      const uploadedPosters = posters.filter(
+        (p) => p.key && p.key.startsWith('upload://')
+      );
+
+      if (uploadedPosters.length === 0) {
+        return null;
+      }
+
+      // The most recently uploaded poster is last in the list
+      return uploadedPosters[uploadedPosters.length - 1].key ?? null;
+    } catch (error) {
+      logger.error(
+        `Error getting latest uploaded poster key for ${ratingKey}`,
+        {
+          label: 'Plex API',
+          error: error instanceof Error ? error.message : String(error),
+          ratingKey,
+        }
+      );
+      return null;
     }
   }
 

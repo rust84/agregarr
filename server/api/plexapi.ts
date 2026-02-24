@@ -2466,6 +2466,15 @@ class PlexAPI {
   }
 
   /**
+   * Get the key of the most recently uploaded poster for an item
+   */
+  public async getLatestUploadedPosterKey(
+    ratingKey: string
+  ): Promise<string | null> {
+    return this.posterManager.getLatestUploadedPosterKey(ratingKey);
+  }
+
+  /**
    * Lock the poster for an item (prevents auto-updates)
    */
   public async lockPoster(ratingKey: string): Promise<void> {
