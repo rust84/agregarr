@@ -122,41 +122,56 @@ class PlexPosterManager {
 
   /**
    * Get the key of the most recently uploaded (upload://) poster for an item.
-   * Returns null if no uploaded poster is found.
+   * Retries a few times with a short delay since Plex processes binary uploads
+   * asynchronously and the poster list may not be updated immediately.
+   * Returns null if no uploaded poster is found after retries.
    */
   public async getLatestUploadedPosterKey(
     ratingKey: string
   ): Promise<string | null> {
-    try {
-      const response = await this.plexApi['plexClient'].query(
-        `/library/metadata/${ratingKey}/posters`
-      );
+    const maxAttempts = 4;
+    const delayMs = 500;
 
-      const posters = (response?.MediaContainer?.Metadata ||
-        []) as PlexPosterMetadata[];
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await this.plexApi['plexClient'].query(
+          `/library/metadata/${ratingKey}/posters`
+        );
 
-      // Plex stores user-uploaded posters with a key starting with "upload://"
-      const uploadedPosters = posters.filter(
-        (p) => p.key && p.key.startsWith('upload://')
-      );
+        const posters = (response?.MediaContainer?.Metadata ||
+          []) as PlexPosterMetadata[];
 
-      if (uploadedPosters.length === 0) {
+        // Plex stores user-uploaded posters with a key starting with "upload://"
+        const uploadedPosters = posters.filter(
+          (p) => p.key && p.key.startsWith('upload://')
+        );
+
+        if (uploadedPosters.length > 0) {
+          // The most recently uploaded poster is last in the list
+          return uploadedPosters[uploadedPosters.length - 1].key ?? null;
+        }
+
+        if (attempt < maxAttempts) {
+          logger.debug(
+            `No uploaded poster found yet for ${ratingKey}, retrying (attempt ${attempt}/${maxAttempts})`,
+            { label: 'Plex API', ratingKey, posterCount: posters.length }
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+      } catch (error) {
+        logger.error(
+          `Error getting latest uploaded poster key for ${ratingKey}`,
+          {
+            label: 'Plex API',
+            error: error instanceof Error ? error.message : String(error),
+            ratingKey,
+          }
+        );
         return null;
       }
-
-      // The most recently uploaded poster is last in the list
-      return uploadedPosters[uploadedPosters.length - 1].key ?? null;
-    } catch (error) {
-      logger.error(
-        `Error getting latest uploaded poster key for ${ratingKey}`,
-        {
-          label: 'Plex API',
-          error: error instanceof Error ? error.message : String(error),
-          ratingKey,
-        }
-      );
-      return null;
     }
+
+    return null;
   }
 
   /**
