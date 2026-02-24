@@ -1057,6 +1057,43 @@ class OverlayLibraryService {
         // Upload modified poster back to Plex
         await plexApi.uploadPosterFromFile(item.ratingKey, tempFilePath);
 
+        // Select the newly uploaded poster as the active one.
+        // Plex does not automatically activate a newly uploaded poster for
+        // library items, so we must explicitly select it before locking.
+        try {
+          const uploadedKey = await plexApi.getLatestUploadedPosterKey(
+            item.ratingKey
+          );
+          if (uploadedKey) {
+            await plexApi.selectPoster(item.ratingKey, uploadedKey);
+            logger.debug('Selected uploaded overlay poster', {
+              label: 'OverlayLibrary',
+              itemTitle: item.title,
+              ratingKey: item.ratingKey,
+              uploadedKey,
+            });
+          } else {
+            logger.warn(
+              'Could not find uploaded poster key to select after upload',
+              {
+                label: 'OverlayLibrary',
+                itemTitle: item.title,
+                ratingKey: item.ratingKey,
+              }
+            );
+          }
+        } catch (selectError) {
+          logger.warn('Failed to select uploaded overlay poster', {
+            label: 'OverlayLibrary',
+            itemTitle: item.title,
+            ratingKey: item.ratingKey,
+            error:
+              selectError instanceof Error
+                ? selectError.message
+                : String(selectError),
+          });
+        }
+
         // Lock poster to prevent Plex from auto-updating it during library scans
         try {
           await plexApi.lockPoster(item.ratingKey);
